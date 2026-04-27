@@ -164,5 +164,43 @@ Format: dated entries, newest at the bottom. Capture *why* + *what changed* + *e
 
 **Next.** Layer 8 (rice). Will pause and ask before picking a rice repo or making any UI/workflow choices.
 
+---
+
+## 2026-04-27 — Day 1 (cont.): Layer 8 (rice install — end-4 baseline)
+
+**Pivot from plan.** end-4 has migrated **AGS → QuickShell** (QML/Qt) sometime before April 2026. Locked decision in `project_decisions` updated. QuickShell is functionally equivalent for cockpit purposes — same architectural role, richer UI toolkit (full Qt ecosystem) at cost of writing QML instead of GJS.
+
+**Install ordeal worth recording for the bootstrap script.** end-4's `./setup install` runs `yay -S --sudoloop` for AUR builds. yay's `--sudoloop` invokes bare `sudo -v` periodically. Default sudoers `verifypw=all` requires *every* matching policy entry to have `NOPASSWD` for `-v` to skip password. archinstall's `/etc/sudoers.d/00_ccsmith33` grants `ccsmith33 ALL=(ALL) ALL` (with password); our temp `/etc/sudoers.d/99-end4-install-tmp` granted NOPASSWD. The interaction made yay prompt for password, where pty/term issues + scrolling output then made the user think the password was wrong (classic UX trap). Fix: add `Defaults:ccsmith33 !authenticate` and `Defaults:ccsmith33 verifypw=never` to the temp drop-in. After install, removed the temp drop-in cleanly.
+
+**Bootstrap implication.** `bootstrap.sh` should write the temp NOPASSWD+!authenticate drop-in *before* invoking end-4 setup, then remove it after. Future-proofing.
+
+**Actions.**
+1. Pre-snapshot `pre-end-4-clone` (#10) before cloning end-4.
+2. Cloned `end-4/dots-hyprland` to `~/end-4-dots/`.
+3. Audited the install script (3-stage: deps / setups / files). Confirmed:
+   - Deps: ~14 `illogical-impulse-*` meta-packages from local PKGBUILDs. Includes QuickShell, Bibata cursor, KDE Qt theming pipeline, microtex (math rendering), fonts.
+   - Setups: adds user to `video,i2c,input` groups; loads `i2c-dev` module; enables `bluetooth.service`, `ydotool` user service; sets dark theme via gsettings + Darkly KDE widget style.
+   - Files: rsyncs `dots/.config/*` into `~/.config/`. With `--firstrun`, replaces existing files cleanly (no `.new` siblings).
+4. Ran `./setup install -f -F --skip-plasmaintg --skip-allgreeting`. After the sudoers fix, install completed cleanly. Total snapshot count climbed to 20 (snap-pac fired through every meta-package transaction).
+5. Removed `/etc/sudoers.d/99-end4-install-tmp` after install.
+6. QuickShell did NOT auto-start because `hyprctl reload` (which the install script runs at the end) does not re-run `exec-once` directives. Started manually with `qs -c ii` and the user is now seeing the rice live (welcome dialog + bar visible).
+7. Imported `~/.config/{hypr,quickshell,kitty,fish,foot,fuzzel,wlogout,Kvantum,matugen,mpv,illogical-impulse,kde-material-you-colors,starship.toml}` into chezmoi. Single big commit (998 files): `f0265db Import end-4 default configs into chezmoi`. Pushed.
+8. Saved planning doc at `docs/cockpit-quickshell-architecture.md` from earlier audit.
+
+**User feedback gathered (input for the customization plan).**
+- Aesthetic: "post-cyberpunk overgrown by plants." Green is dominant favorite color; dark mode default everywhere; green borders on dark terminals.
+- Animations: smooth but fast.
+- Top bar: like it, slightly small (defer).
+- Terminal: text too small, no borders, "maybe migrate from kitty."
+- Keybind muscle memory: `Super+Q` for terminal (end-4 has it on `killactive`), `Super+Space` for fuzzel (end-4 uses tap-Super), `Super+L` for hyprlock (end-4 uses `loginctl lock-session` which doesn't actually launch the lock UI), `Super+Tab` to hold-and-cycle workspaces (end-4 uses overview).
+
+**Research delegated (in progress as user is at gym):**
+- Keybind audit + animation tuning + lockscreen diagnosis. **DONE.** Lockscreen: `loginctl lock-session` only signals session state; doesn't launch hyprlock. Fix is binding directly to `hyprlock`. Animations: end-4's speeds are 200-700ms with overshoot beziers; user wants 100-200ms with gentle curves.
+- Terminal alternatives. **DONE.** Recommendation: stay on kitty, fix the config. VHS uses ttyd internally so host terminal is irrelevant for recordings. Backup option: Ghostty 1.3.1.
+- Theming pipeline (matugen → consumers; how to override with static palette). **PENDING.**
+
+**Next.** Once theming agent returns, write a comprehensive plan doc at `docs/customization-plan.md`. User explicitly said: do the BIG things first, small adjustments (keybinds, navbar size) after.
+
+
 
 
