@@ -250,7 +250,58 @@ Long single-day session. Full path: aesthetic application, terminal config, keyb
 
 **Next session.** Fresh chat. Read `docs/handoff-cockpit.md` and start with `pacman -S podman-docker` + the cockpit-spawn.sh script.
 
+---
 
+## 2026-04-27 — Day 1 (cockpit build + display calibration)
 
+Picked up the handoff. `podman-docker` had already been pulled in (likely as a dep during Layer 12); socket was active. Skipped step 1 of the handoff and went straight to spawn-script work. The session ended up reshaping the cockpit design twice based on what the user actually wanted to teach.
 
+**Cockpit redesigned: monitoring → context-aware teaching rig.**
+
+Initial implementation followed handoff doc: Super+Shift+P spawns workspaces N+1 (DEV: VS Code + kitty) and N+2 (MONITOR: lazydocker + k9s + btop + ctop). Tested. Three problems surfaced immediately:
+- ctop hardcoded to `/var/run/docker.sock` (Docker daemon, not podman) — broken for this stack.
+- k9s with no kubeconfig is empty — and per user, the course is "git → docker → deployment", not k8s. k9s doesn't belong in the always-on rig.
+- 4-pane dwindle layout gives btop ~1/4 screen, below its minimum render size.
+- Plus the handoff used `kitty -1` (singleton mode), which means the `[workspace N silent]` exec rule binds to the spawned process, not later-created windows — second/third panes can land on the wrong workspace. Dropped `-1`.
+
+User reframe: **monitor + teach, not monitor + monitor.** Three keybinds, three concerns:
+- `Super+Shift+P` → DEV (VS Code + kitty in cwd) + MONITOR (lazydocker if container project else lazygit, plus driver kitty seeded with the right command for the project).
+- `Super+Shift+T` → fuzzel preset picker → `git` / `containers` / `image-layers` (`dive`-on-image, fuzzel-prompts which image from `podman images`).
+- `Super+Shift+K` → k9s solo, agnostic of cwd.
+
+**Context-awareness mechanism (no kitty config changes).** Active window's PID via `hyprctl activewindow -j`, then `pgrep -P` for its most-recent direct child. That child is the shell, whose `/proc/<pid>/cwd` is the project root. First implementation walked to the deepest descendant — descended into a claude-code internal worker whose cwd was `/proc/<pid>/fdinfo`. Direct-child-only is the right depth.
+
+**Project detection → seed command** (in `lib.sh::cockpit_seed_cmd`): compose.{yaml,yml} → `podman compose up --build`; Containerfile/Dockerfile → `podman build -t <dirname> .`; package.json → `npm`/`pnpm`/`yarn`/`bun run dev` (lockfile-aware); `*.tf` → `tofu plan`; Cargo.toml → `cargo run`.
+
+**Seed-not-execute trick.** Driver kitty runs `fish -i -C "commandline '<seed>'"` — fish's `-C` runs init code, `commandline 'X'` puts X in the editing buffer without executing. User hits Enter when ready, or edits/wipes it. Avoids the "magic-but-dangerous" auto-run of dev servers.
+
+**Files added under `~/.config/hypr/scripts/cockpit/`** (all chezmoi-tracked now): `lib.sh`, `spawn.sh`, `teaching.sh`, `k9s.sh`. Keybinds in `custom/keybinds.conf`.
+
+---
+
+**Display calibration ordeal — fractional scaling is the wrong tool.**
+
+User flagged "everything is small" — Teams/Firefox especially, kitty borderline. Tried Hyprland monitor scale 1.25, then 1.5. Hyprland silently snapped 1.5 → 1.6 because 2560÷1.6=1600 (integer logical pixels) while 1.5 isn't clean. **Worth knowing:** Hyprland prefers integer-dividing scales and will round; if you want exact 1.5 you may need to pick a resolution that divides cleanly.
+
+Global scale fixed text but blew up cursor and bar. User: "cursor is huge, bar is huge." Reverted to scale 1.0 and went per-toolkit:
+- Kitty: `font_size 13 → 16` (matches 1.25×13=16.25 visual, restores his "great" baseline at native scale).
+- GTK: `gsettings set org.gnome.desktop.interface text-scaling-factor 1.25`. Persists in dconf — **NOT chezmoi-tracked**, bootstrap.sh needs to call this.
+- Qt: `env = QT_FONT_DPI,120` in `custom/env.conf` (default is 96; 120/96 = 1.25). Requires session restart.
+- Firefox: `user_pref("layout.css.devPixelsPerPx", "1.25")` in `~/.config/mozilla/firefox/<profile>/user.js`. Requires Firefox restart, then persistent.
+
+**Firefox profile path note.** This system stores Firefox profiles under `~/.config/mozilla/firefox/` (via XDG path), NOT `~/.mozilla/firefox/`. Took a minute to discover — `ls ~/.mozilla` returned ENOENT despite Firefox running. Active profile dir name (`fx5c8yxq.default-release`) is hardcoded in chezmoi source for now; if we ever provision a second machine with a different profile hash, this needs to become a chezmoi-templated path.
+
+**Cursor size** went back to default 24px once scale returned to 1.0 — no separate fix needed. The "huge cursor" was 24 × 1.6 = 38px under the inflated scale.
+
+**QuickShell overview overflowed horizontally** at the new geometry. End-4 default `overview.scale: 0.18` × 5 columns ≈ 90% screen + gaps spilled past the edge. Dropped to `0.15` in `~/.config/illogical-impulse/config.json` — fits cleanly. Grid stays 2×5.
+
+**Shape of "global text size" on Wayland — there isn't one knob.** Three toolkits, three knobs, one runtime gsetting. Documented above so future-me doesn't go down the fractional-scale rabbit hole again.
+
+**State at close.**
+- Cockpit: spawn.sh works on real projects, seeds correctly, MONITOR adapts. Teaching presets wired but only `git` exercised so far. k9s standalone confirmed.
+- Display: scale 1.0, kitty 16pt, GTK/Qt/Firefox all at 1.25× text. Bar/cursor/icons untouched. Verified by user: "perfect."
+- chezmoi: re-add'd 5 modified tracked files, added 5 new (4 cockpit scripts + Firefox user.js). Pushed.
+- 14 (backup), L15 (maintenance), and the deferred items from prior journal entries still pending.
+
+**Next.** Pick a real personal/class project, hit Super+Shift+P, validate end-to-end. Iterate on the teaching presets as actual lessons need them. Tackle L14 backup when motivated.
 
