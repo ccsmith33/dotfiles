@@ -201,6 +201,56 @@ Format: dated entries, newest at the bottom. Capture *why* + *what changed* + *e
 
 **Next.** Once theming agent returns, write a comprehensive plan doc at `docs/customization-plan.md`. User explicitly said: do the BIG things first, small adjustments (keybinds, navbar size) after.
 
+---
+
+## 2026-04-27 — Day 1 (close): everything from rice → cockpit-ready
+
+Long single-day session. Full path: aesthetic application, terminal config, keybinds, lockscreen, login UX, kernel fallback, cloud tooling, dev toolchain, cockpit-supporting tools, wallpaper.
+
+**Aesthetic Phase 1-3 applied.**
+- Overgrowth palette locked (Strategy C: matugen-once from anchor `#6c8a59`, hand-edited M3 error→`#d68a4c` copper, tertiary→`#c4a37a` warm tan, surfaces darkened-and-browned, ANSI red/green matched in brightness for diff readability). Frozen artifacts at `aesthetic/overgrowth-locked/`. Pattern for future wallpaper changes documented in commit message: switchwall.sh → cp locked palette back → applycolor.sh → hyprctl reload.
+- Kitty: font_size 13, padding 21.75 (kept end-4 default). Kitty's own border off (Hyprland draws it now).
+- Hyprland custom/general.conf: border_size 3, solid moss-mid active, solid bark-deep inactive.
+- baseBarHeight 40→48 in QuickShell Appearance.qml.
+- workspaceZoom 1.07→1.0 (was cropping wallpaper unnecessarily on both axes).
+
+**Functional Phase 3.**
+- custom/keybinds.conf overrides (Super+Q terminal, Super+W close, Super+L hyprlock, Super+Tab/Shift+Tab cycle workspaces, Super+Space fuzzel, Super+Shift+S grim+slurp screenshot). Each `unbind` followed by `bind` because Hyprland fires both bindings when same key bound twice (Super+W discovery).
+- hypridle: timeout/sleep listeners changed to call `hyprlock` directly instead of `loginctl lock-session`.
+- hyprlock: dropped pam_fprintd.so (PAM serial evaluation makes "fingerprint OR password at lock" UX painful — fingerprint stayed at sudo where the wait pattern fits). fade_on_empty true→false (entry box was intentionally invisible-when-empty by end-4 default, surprising).
+
+**Login UX unification.**
+- mkinitcpio HOOKS: udev→systemd, encrypt→sd-encrypt, keymap+consolefont→sd-vconsole. /etc/crypttab.initramfs created with tpm2-device=auto. /etc/default/grub: cryptdevice=→rd.luks.name=. Initramfs regenerated for both kernels.
+- TPM2 enrolled to LUKS keyslot 1 bound to PCR 7. Password slot 0 kept as fallback.
+- /etc/pam.d/sudo: pam_fprintd.so sufficient. Right-index finger enrolled.
+- /etc/greetd/config.toml: auto-login as ccsmith33 → start-hyprland. (Was tuigreet --cmd Hyprland — also fixed missing start-hyprland wrapper warning.)
+- ~/.config/hypr/custom/execs.conf: exec-once = sleep 0.5 && hyprlock --immediate.
+- Result: LUKS auto-unlocks (no prompt), no tuigreet, hyprlock UI as the only visible auth at boot. Single password, single beautiful screen.
+
+**Sudoers ordeal worth journaling.** end-4's setup script uses `yay -S --sudoloop`. yay's --sudoloop runs bare `sudo -v` to keep credentials warm. Default sudoers `verifypw=all` requires *every* matching policy entry to have NOPASSWD before -v skips password. archinstall's `/etc/sudoers.d/00_ccsmith33` grants `ccsmith33 ALL=(ALL) ALL` (with password); our temp drop-in granted NOPASSWD. The interaction made yay prompt for password despite NOPASSWD; combined with pty/scrolling-output confusion, the user thought their password was wrong. **Fix: temp NOPASSWD drop-in needs `Defaults:ccsmith33 !authenticate` and `Defaults:ccsmith33 verifypw=never` for AUR builds.** Removed after install. **Bootstrap.sh implication: when calling end-4's setup, add the temp drop-in first.**
+
+**Layer 8 / 11 / 10 / 12 packages.**
+- linux-lts + headers installed, GRUB lists both kernels.
+- L11 cloud: azure-cli, kubectl, helm, k9s, kubectx, kubens, terraform, opentofu. AUR: powershell-bin (PowerShell 7.6.1).
+- L10 dev: mise, direnv, glab, podman, buildah, distrobox, eza, bat, fd, ripgrep, zoxide, fzf, lazygit. AUR: visual-studio-code-bin (1.117).
+- L12 cockpit deps: dive, btop, chafa, glow, d2, vhs (pacman). lazydocker, ctop, viu (AUR).
+- Firefox 150 installed for browsing.
+
+**Wallpaper.**
+- 4000×2249 alphacoders 1406300 set as ~/Pictures/wallpapers/City.jpg. switchwall.sh → restore overgrowth palette pattern works (after fixing the bug where /tmp/mc.scss.locked got saved as 0 bytes one round; chezmoi-locked artifact is canonical).
+- QuickShell required full restart to pick up new wallpaper file at same path (FileView watcher didn't trigger on file content change without path change).
+
+**Cockpit decision.**
+- **Pivot from QML-widgets-in-QuickShell to Hyprland workspace orchestration.** Super+Shift+P → spawn workspaces N+1 (DEV: VS Code + kitty) and N+2 (MONITOR: lazydocker + k9s + btop + ctop). Way more direct for the teaching use case; bounded scope; uses the actual tools students will use.
+
+**State at close of day 1.**
+- Snapshot count well past 100.
+- chezmoi commit `caad953` then `6e564d1` then various intermediate. All pushed to github.com/ccsmith33/dotfiles.
+- All Layer 0-13 work complete; L14 (backup), L15 (maintenance), L12 cockpit-build pending.
+
+**Next session.** Fresh chat. Read `docs/handoff-cockpit.md` and start with `pacman -S podman-docker` + the cockpit-spawn.sh script.
+
+
 
 
 
